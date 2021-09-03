@@ -1,0 +1,71 @@
+﻿@page "/dynamic"
+@using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.AspNetCore.Components
+@inject CompileService service
+
+<div class="card-body">
+    @if (_type != null)
+    {
+        <DynamicComponent Type="_type" />
+    }
+
+</div>
+<div class="card">
+        <div class="card-body">
+            <pre>@_compileText</pre>
+        </div>
+    </div>
+
+@code {
+    private Type _type;
+    private string _compileText;
+    private HubConnection hubConnection;
+    private List<string> messages = new List<string>();
+    private string userInput;
+    private string messageInput;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("https://localhost:6001/components")
+            .Build();
+
+        hubConnection.On<string>("SendComponent", async (code) =>
+        {
+            await Run(code);
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    public async Task Run(string code)
+    {
+        Console.WriteLine("Code Recieved");
+        try
+        {
+            service.CompileLog = new List<string>();
+            var type = await service.CompileBlazor(code);
+
+            if (type != null)
+            {
+                service.CompileLog.Add("Render Blazor Component");
+                _type = type;
+            }
+            else
+            {
+                service.CompileLog.Add("Blazor Component not found");
+            }
+        }
+        catch (Exception e)
+        {
+            service.CompileLog.Add(e.Message);
+            service.CompileLog.Add(e.StackTrace);
+            throw;
+        }
+        finally
+        {
+            _compileText = string.Join("\r\n", service.CompileLog);
+            this.StateHasChanged();
+        }
+    }
+}
